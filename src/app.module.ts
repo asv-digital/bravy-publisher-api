@@ -3,10 +3,12 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { BullModule } from '@nestjs/bullmq';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { PrismaModule } from './database/prisma.module';
 import { MinioModule } from './database/minio.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
+import { CommonModule } from './common/common.module';
 import { HealthModule } from './modules/health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
@@ -39,6 +41,11 @@ import redisConfig from './config/redis.config';
       }),
     }),
     ScheduleModule.forRoot(),
+    ThrottlerModule.forRoot([
+      { name: 'default', ttl: 60_000, limit: 60 },
+      { name: 'auth', ttl: 60_000, limit: 10 },
+    ]),
+    CommonModule,
     PrismaModule,
     MinioModule,
     HealthModule,
@@ -56,6 +63,7 @@ import redisConfig from './config/redis.config';
     GenerationModule,
   ],
   providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],

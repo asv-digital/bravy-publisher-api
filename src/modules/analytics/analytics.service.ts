@@ -13,24 +13,19 @@ export class AnalyticsService {
     const days = parseInt(period.replace('d', ''), 10);
     const since = new Date();
     since.setDate(since.getDate() - days);
+    const now = new Date();
 
     const where: any = {
       status: 'COMPLETED',
       publishedAt: { gte: since },
       content: { tenantId },
     };
-
-    if (dto.socialAccountId) {
-      where.socialAccountId = dto.socialAccountId;
-    }
+    if (dto.socialAccountId) where.socialAccountId = dto.socialAccountId;
 
     const targets = await this.prisma.publishTarget.findMany({
       where,
       include: {
-        analytics: {
-          orderBy: { fetchedAt: 'desc' },
-          take: 1,
-        },
+        analytics: { orderBy: { fetchedAt: 'desc' }, take: 1 },
         content: true,
       },
       orderBy: { publishedAt: 'asc' },
@@ -45,13 +40,37 @@ export class AnalyticsService {
     let engagementSum = 0;
     let engagementCount = 0;
 
-    const timeSeriesMap = new Map<
+    const dailyMap = new Map<
       string,
-      { date: string; likes: number; comments: number; shares: number; saves: number; reach: number; impressions: number }
+      {
+        date: string;
+        engagement: number;
+        reach: number;
+        impressions: number;
+        likes: number;
+        comments: number;
+        newFollowers: number;
+        unfollowers: number;
+        postsByDay: number;
+      }
     >();
+    const postsPerDayMap = new Map<string, number>();
+    const breakdownMap = new Map<string, { count: number; engagement: number }>();
 
     for (const target of targets) {
       const latest = target.analytics[0];
+      const dateKey = target.publishedAt
+        ? target.publishedAt.toISOString().slice(0, 10)
+        : 'unknown';
+
+      postsPerDayMap.set(dateKey, (postsPerDayMap.get(dateKey) ?? 0) + 1);
+
+      const contentType = target.content.contentType;
+      const b = breakdownMap.get(contentType) ?? { count: 0, engagement: 0 };
+      b.count += 1;
+      if (latest?.engagementRate != null) b.engagement += latest.engagementRate;
+      breakdownMap.set(contentType, b);
+
       if (!latest) continue;
 
       totalLikes += latest.likes;
@@ -60,49 +79,117 @@ export class AnalyticsService {
       totalSaves += latest.saves;
       totalReach += latest.reach;
       totalImpressions += latest.impressions;
-
-      if (latest.engagementRate !== null) {
+      if (latest.engagementRate != null) {
         engagementSum += latest.engagementRate;
-        engagementCount++;
+        engagementCount += 1;
       }
 
-      const dateKey = target.publishedAt
-        ? target.publishedAt.toISOString().slice(0, 10)
-        : 'unknown';
-
-      const existing = timeSeriesMap.get(dateKey) || {
+      const existing = dailyMap.get(dateKey) ?? {
         date: dateKey,
-        likes: 0,
-        comments: 0,
-        shares: 0,
-        saves: 0,
+        engagement: 0,
         reach: 0,
         impressions: 0,
+        likes: 0,
+        comments: 0,
+        newFollowers: 0,
+        unfollowers: 0,
+        postsByDay: 0,
       };
-
       existing.likes += latest.likes;
       existing.comments += latest.comments;
-      existing.shares += latest.shares;
-      existing.saves += latest.saves;
       existing.reach += latest.reach;
       existing.impressions += latest.impressions;
-
-      timeSeriesMap.set(dateKey, existing);
+      existing.engagement += latest.engagementRate ?? 0;
+      existing.postsByDay += 1;
+      dailyMap.set(dateKey, existing);
     }
 
-    return {
-      cards: {
-        totalPosts: targets.length,
-        totalLikes,
-        totalComments,
-        totalShares,
-        totalSaves,
-        totalReach,
-        totalImpressions,
-        avgEngagementRate:
-          engagementCount > 0 ? engagementSum / engagementCount : 0,
+    const avgEngagementRate =
+      engagementCount > 0 ? engagementSum / engagementCount : 0;
+
+    const scheduledTargets = await this.prisma.publishTarget.findMany({
+      where: {
+        status: 'PENDING',
+        scheduledAt: { gte: now },
+        content: { tenantId },
       },
-      timeSeries: Array.from(timeSeriesMap.values()),
+      include: { content: true },
+      orderBy: { scheduledAt: 'asc' },
+      take: 5,
+    });
+
+    const recentPublished = [...targets]
+      .filter((t) => t.publishedAt)
+      .sort(
+        (a, b) =>
+          (b.publishedAt?.getTime() ?? 0) - (a.publishedAt?.getTime() ?? 0),
+      )
+      .slice(0, 5)
+      .map((t) => ({
+        id: t.content.id,
+        slug: t.content.slug,
+        publishedAt: t.publishedAt!.toISOString(),
+        engagement: t.analytics[0]?.engagementRate ?? 0,
+      }));
+
+    const topPosts = [...targets]
+      .filter((t) => t.analytics[0])
+      .sort(
+        (a, b) =>
+          (b.analytics[0].engagementRate ?? 0) -
+          (a.analytics[0].engagementRate ?? 0),
+      )
+      .slice(0, 5)
+      .map((t) => ({
+        contentId: t.content.id,
+        slug: t.content.slug,
+        persona: (t.content.persona ?? 'empresario') as any,
+        pattern: (t.content.pattern ?? 'A') as any,
+        publishedAt: t.publishedAt?.toISOString() ?? '',
+        analytics: {
+          likes: t.analytics[0].likes,
+          comments: t.analytics[0].comments,
+          shares: t.analytics[0].shares,
+          saves: t.analytics[0].saves,
+          reach: t.analytics[0].reach,
+          impressions: t.analytics[0].impressions,
+          engagementRate: t.analytics[0].engagementRate ?? 0,
+        },
+      }));
+
+    return {
+      totalPublished: targets.length,
+      avgEngagement: avgEngagementRate,
+      totalReach,
+      scheduledCount: scheduledTargets.length,
+      totalFollowersGained: 0,
+      totalUnfollowers: 0,
+      totalLikes,
+      totalComments,
+      totalShares,
+      totalSaves,
+      avgEngagementRate,
+      contentTypeBreakdown: Array.from(breakdownMap.entries()).map(
+        ([type, v]) => ({
+          type,
+          count: v.count,
+          engagement: v.count > 0 ? v.engagement / v.count : 0,
+        }),
+      ),
+      postsPerDay: Array.from(postsPerDayMap.entries())
+        .map(([date, count]) => ({ date, count }))
+        .sort((a, b) => a.date.localeCompare(b.date)),
+      dailyEngagement: Array.from(dailyMap.values()).sort((a, b) =>
+        a.date.localeCompare(b.date),
+      ),
+      topPosts,
+      recentPublished,
+      upcoming: scheduledTargets.map((t) => ({
+        id: t.content.id,
+        slug: t.content.slug,
+        scheduledAt: t.scheduledAt!.toISOString(),
+        persona: (t.content.persona ?? 'empresario') as any,
+      })),
     };
   }
 

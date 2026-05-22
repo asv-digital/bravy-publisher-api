@@ -1,8 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { ContentType, Slide } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
+import { EncryptionService } from '../../common/services/encryption.service';
 import { PublishAdapterRegistry } from './adapters/adapter-registry';
+import { ContentToPublish, MediaItem } from './adapters/base-adapter';
 
 @Injectable()
 export class PublishingService {
@@ -11,6 +14,7 @@ export class PublishingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly adapterRegistry: PublishAdapterRegistry,
+    private readonly encryption: EncryptionService,
     @InjectQueue('publish') private readonly publishQueue: Queue,
   ) {}
 
@@ -42,21 +46,20 @@ export class PublishingService {
       },
     });
 
-    const imageUrls = target.content.slides
-      .filter(s => s.imageUrl)
-      .map(s => s.imageUrl!);
+    const content = this.buildContentToPublish(
+      target.content.contentType,
+      target.content.slides,
+      target.content.caption ?? '',
+    );
 
-    if (imageUrls.length < 2) {
-      throw new Error(`Content ${target.contentId} has fewer than 2 rendered slides`);
-    }
+    const adapter = this.adapterRegistry.get(
+      target.socialAccount.platform,
+      target.content.contentType,
+    );
 
-    const adapter = this.adapterRegistry.get(target.socialAccount.platform);
-
-    const result = await adapter.publishCarousel({
-      imageUrls,
-      caption: target.content.caption || '',
+    const result = await adapter.publish(content, {
       accountId: target.socialAccount.accountId,
-      accessToken: target.socialAccount.accessToken,
+      accessToken: this.encryption.decrypt(target.socialAccount.accessToken),
     });
 
     await this.prisma.publishTarget.update({
@@ -74,5 +77,35 @@ export class PublishingService {
     });
 
     return result;
+  }
+
+  private buildContentToPublish(
+    contentType: ContentType,
+    slides: Slide[],
+    caption: string,
+  ): ContentToPublish {
+    const renderedImages: MediaItem[] = slides
+      .filter(s => s.imageUrl)
+      .map(s => ({ kind: 'image' as const, url: s.imageUrl! }));
+
+    switch (contentType) {
+      case 'CAROUSEL': {
+        if (renderedImages.length < 2) {
+          throw new Error('Carousel content requires at least 2 rendered slides');
+        }
+        return { type: 'CAROUSEL', media: renderedImages, caption };
+      }
+      case 'STATIC': {
+        if (renderedImages.length === 0) {
+          throw new Error('Static content has no rendered image');
+        }
+        return { type: 'STATIC', media: renderedImages[0], caption };
+      }
+      case 'REEL': {
+        throw new Error(
+          'REEL publishing not yet supported — video URL is not modeled on Content/Slide',
+        );
+      }
+    }
   }
 }

@@ -18,7 +18,13 @@ import {
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-const DATASET_DIR = join(process.env.HOME || '~', 'codigos/marketing/posts/dataset');
+// Repo-local path by default; override with DATASET_DIR env if a custom location is needed.
+// Service is started from the backend root in dev (ts-node) and prod (node dist/main.js),
+// so process.cwd() resolves to the backend root in both cases.
+const DATASET_DIR =
+  process.env.DATASET_DIR && process.env.DATASET_DIR.length > 0
+    ? process.env.DATASET_DIR
+    : join(process.cwd(), 'datasets');
 
 @Injectable()
 export class GenerationService {

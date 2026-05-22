@@ -1,22 +1,58 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PublishAdapter, PublishParams, PublishResult } from './base-adapter';
+import { ContentType, Platform } from '@prisma/client';
+import {
+  PublishAdapter,
+  ContentToPublish,
+  MediaItem,
+  PublishContext,
+  PublishResult,
+} from './base-adapter';
 
 @Injectable()
 export class InstagramClient implements PublishAdapter {
-  readonly platform = 'INSTAGRAM';
+  readonly platform: Platform = Platform.INSTAGRAM;
   private readonly logger = new Logger(InstagramClient.name);
   private readonly API_BASE = 'https://graph.instagram.com/v21.0';
   private readonly PROCESS_WAIT_PER_SLIDE_MS = 8_000;
   private readonly CAROUSEL_WAIT_MS = 15_000;
 
-  async publishCarousel(params: PublishParams): Promise<PublishResult> {
-    const { imageUrls, caption, accountId, accessToken } = params;
+  supports(contentType: ContentType): boolean {
+    return contentType === ContentType.CAROUSEL;
+  }
+
+  async publish(content: ContentToPublish, ctx: PublishContext): Promise<PublishResult> {
+    switch (content.type) {
+      case 'CAROUSEL':
+        return this.publishCarousel(content.media, content.caption, ctx);
+      default:
+        throw new Error(`InstagramClient does not support ${content.type} yet`);
+    }
+  }
+
+  async validateCredentials(ctx: PublishContext): Promise<boolean> {
+    try {
+      const result = await this.igGet(`/${ctx.accountId}`, { fields: 'id,username' }, ctx.accessToken);
+      return !!result.id;
+    } catch {
+      return false;
+    }
+  }
+
+  private async publishCarousel(
+    media: MediaItem[],
+    caption: string,
+    ctx: PublishContext,
+  ): Promise<PublishResult> {
+    const imageUrls = media
+      .filter(m => m.kind === 'image')
+      .map(m => m.url);
 
     if (imageUrls.length < 2 || imageUrls.length > 10) {
-      throw new Error(`Carousel requires 2-10 items, got ${imageUrls.length}`);
+      throw new Error(`Carousel requires 2-10 image items, got ${imageUrls.length}`);
     }
 
-    // PHASE 1: Create children sequentially (IG Login API does NOT support batch)
+    const { accountId, accessToken } = ctx;
+
     this.logger.log(`Creating ${imageUrls.length} child containers...`);
     const childrenIds: string[] = [];
 
@@ -30,12 +66,10 @@ export class InstagramClient implements PublishAdapter {
       this.logger.log(`Child ${i + 1}/${imageUrls.length}: container ${result.id}`);
     }
 
-    // PHASE 2: Wait for Meta to process children
     const waitMs = this.PROCESS_WAIT_PER_SLIDE_MS * childrenIds.length;
     this.logger.log(`Waiting ${waitMs}ms for processing...`);
     await this.sleep(waitMs);
 
-    // PHASE 3: Create CAROUSEL parent container
     this.logger.log('Creating CAROUSEL container...');
     const carouselResult = await this.igPost(`/${accountId}/media`, {
       media_type: 'CAROUSEL',
@@ -48,7 +82,6 @@ export class InstagramClient implements PublishAdapter {
 
     await this.sleep(this.CAROUSEL_WAIT_MS);
 
-    // PHASE 4: Publish
     this.logger.log('Publishing...');
     const publishResult = await this.igPost(`/${accountId}/media_publish`, {
       creation_id: carouselId,
@@ -58,18 +91,9 @@ export class InstagramClient implements PublishAdapter {
 
     return {
       externalMediaId: publishResult.id,
-      platform: 'INSTAGRAM',
+      platform: Platform.INSTAGRAM,
       publishedAt: new Date(),
     };
-  }
-
-  async validateCredentials(accountId: string, accessToken: string): Promise<boolean> {
-    try {
-      const result = await this.igGet(`/${accountId}`, { fields: 'id,username' }, accessToken);
-      return !!result.id;
-    } catch {
-      return false;
-    }
   }
 
   private async igPost(

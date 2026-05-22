@@ -50,12 +50,13 @@ export class AuthService {
     });
 
     const user = tenant.users[0];
-    return this.issueTokens(user.id, tenant.id, user.role);
+    return this.buildSession(user, tenant);
   }
 
   async login(dto: LoginDto) {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
+      include: { tenant: true },
     });
     if (!user) {
       throw new UnauthorizedException('Credenciais invalidas');
@@ -66,7 +67,7 @@ export class AuthService {
       throw new UnauthorizedException('Credenciais invalidas');
     }
 
-    return this.issueTokens(user.id, user.tenantId, user.role);
+    return this.buildSession(user, user.tenant);
   }
 
   async refresh(refreshToken: string) {
@@ -76,22 +77,27 @@ export class AuthService {
       });
       const user = await this.prisma.user.findUnique({
         where: { id: payload.sub },
+        include: { tenant: true },
       });
       if (!user) {
         throw new UnauthorizedException('Usuario nao encontrado');
       }
-      return this.issueTokens(user.id, user.tenantId, user.role);
+      return this.buildSession(user, user.tenant);
     } catch {
       throw new UnauthorizedException('Refresh token invalido');
     }
   }
 
-  private issueTokens(userId: string, tenantId: string, role: string) {
-    const payload = { sub: userId, tenantId, role };
+  private buildSession(
+    user: { id: string; tenantId: string; role: string; email: string; name: string; createdAt: Date },
+    tenant: { id: string; name: string },
+  ) {
+    const payload = { sub: user.id, tenantId: user.tenantId, role: user.role };
+    const expiresInStr = process.env.JWT_EXPIRES_IN || '15m';
 
     const accessToken = this.jwtService.sign(payload, {
       secret: process.env.JWT_SECRET,
-      expiresIn: process.env.JWT_EXPIRES_IN || '15m',
+      expiresIn: expiresInStr,
     });
 
     const refreshToken = this.jwtService.sign(payload, {
@@ -99,6 +105,27 @@ export class AuthService {
       expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
     });
 
-    return { accessToken, refreshToken };
+    return {
+      accessToken,
+      refreshToken,
+      expiresIn: parseDurationToSeconds(expiresInStr),
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        tenantId: tenant.id,
+        tenantName: tenant.name,
+        createdAt: user.createdAt.toISOString(),
+      },
+    };
   }
+}
+
+function parseDurationToSeconds(value: string): number {
+  const match = value.match(/^(\d+)([smhd])$/);
+  if (!match) return 900;
+  const n = parseInt(match[1], 10);
+  const mult: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400 };
+  return n * (mult[match[2]] ?? 1);
 }
