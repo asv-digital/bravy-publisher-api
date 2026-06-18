@@ -101,10 +101,11 @@ export class InstagramOAuthService {
       );
     }
 
-    const igUsername = await this.fetchInstagramUsername(
-      page.instagram_business_account.id,
-      page.access_token,
-    );
+    const { username: igUsername, profilePictureUrl } =
+      await this.fetchInstagramProfile(
+        page.instagram_business_account.id,
+        page.access_token,
+      );
 
     const expiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000); // ~60d
 
@@ -121,6 +122,7 @@ export class InstagramOAuthService {
       platform: Platform.INSTAGRAM,
       accountName: igUsername,
       accountId: page.instagram_business_account.id,
+      avatarUrl: profilePictureUrl,
       accessToken: this.encryption.encrypt(page.access_token),
       userAccessToken: this.encryption.encrypt(longToken),
       providerUserId,
@@ -182,11 +184,22 @@ export class InstagramOAuthService {
 
     const expiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
 
+    // O profile_picture_url do IG é um link de CDN assinado que rota com o
+    // tempo — re-busca aqui pra manter o avatar válido. Falha não bloqueia o
+    // refresh do token (mantém o avatar antigo se a chamada cair).
+    const profilePictureUrl = await this.fetchInstagramProfile(
+      account.accountId,
+      match.access_token,
+    )
+      .then((p) => p.profilePictureUrl)
+      .catch(() => undefined);
+
     await this.prisma.socialAccount.update({
       where: { id: socialAccountId },
       data: {
         accessToken: this.encryption.encrypt(match.access_token),
         userAccessToken: this.encryption.encrypt(newUserToken),
+        ...(profilePictureUrl ? { avatarUrl: profilePictureUrl } : {}),
         tokenExpiresAt: expiresAt,
         lastRefreshedAt: new Date(),
       },
@@ -228,7 +241,9 @@ export class InstagramOAuthService {
           apiPages.map(async (p) => {
             const igId = p.instagram_business_account?.id;
             const igUsername = igId
-              ? await this.fetchInstagramUsername(igId, p.access_token).catch(() => undefined)
+              ? await this.fetchInstagramProfile(igId, p.access_token)
+                  .then((profile) => profile.username)
+                  .catch(() => undefined)
               : undefined;
             return { id: p.id, name: p.name, hasInstagram: !!igId, igUsername };
           }),
@@ -344,17 +359,28 @@ export class InstagramOAuthService {
     return withIg;
   }
 
-  private async fetchInstagramUsername(
+  /**
+   * Fetches the public profile (username + avatar) of an Instagram Business
+   * account in a single Graph call. `profile_picture_url` is a CDN link that
+   * Meta rotates over time, so we re-fetch it on every token refresh.
+   */
+  private async fetchInstagramProfile(
     igBusinessId: string,
     pageToken: string,
-  ): Promise<string> {
+  ): Promise<{ username: string; profilePictureUrl?: string }> {
     const params = new URLSearchParams({
-      fields: 'username',
+      fields: 'username,profile_picture_url',
       access_token: pageToken,
     });
     const url = `${GRAPH_BASE}/${igBusinessId}?${params.toString()}`;
-    const json = await this.fetchJson<{ username: string }>('GET', url);
-    return json.username ?? `ig_${igBusinessId}`;
+    const json = await this.fetchJson<{
+      username?: string;
+      profile_picture_url?: string;
+    }>('GET', url);
+    return {
+      username: json.username ?? `ig_${igBusinessId}`,
+      profilePictureUrl: json.profile_picture_url,
+    };
   }
 
   private async fetchJson<T>(method: 'GET' | 'POST', url: string): Promise<T> {

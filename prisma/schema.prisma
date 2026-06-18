@@ -49,15 +49,6 @@ enum SlideType {
   CTA
 }
 
-enum TemplateFamily {
-  STEP
-  COMPENDIUM
-  EDITORIAL
-  TERMINAL
-  SPLIT
-  STATIC
-}
-
 model Tenant {
   id             String          @id @default(uuid())
   name           String
@@ -69,6 +60,7 @@ model Tenant {
   contents       Content[]
   socialAccounts SocialAccount[]
   brandKits      BrandKit[]
+  templates      Template[]
 
   @@map("tenants")
 }
@@ -117,6 +109,9 @@ model SocialAccount {
   platform         Platform
   accountName      String    @map("account_name")
   accountId        String    @map("account_id")
+  // URL da foto de perfil do canal (ex: profile_picture_url do IG). Pode rotar
+  // no CDN do provedor, então é re-buscada a cada refresh de token.
+  avatarUrl        String?   @map("avatar_url")
   accessToken      String    @map("access_token")
   // Long-lived user access token (encrypted) — kept so the refresh cron can
   // re-derive a fresh Page Access Token without forcing the user to reconnect.
@@ -135,16 +130,29 @@ model SocialAccount {
   @@map("social_accounts")
 }
 
+// Templates CUSTOM do usuário (designer free-form, RFC fase 2). Os templates de
+// SISTEMA (Editorial/Twitter/Terminal) são definidos em código no frontend; só
+// os custom vivem aqui. `layout` = LayoutSpec (slots desenhados no canvas).
 model Template {
-  id           String         @id @default(uuid())
-  slug         String         @unique
-  family       TemplateFamily
+  id           String   @id @default(uuid())
+  tenantId     String?  @map("tenant_id")
+  name         String   @default("Template")
+  kind         String   @default("post") // 'post' | 'carousel'
+  format       String   @default("1:1")
+  layout       Json? // LayoutSpec (slots)
+  styleData    Json?    @map("style_data") // paleta/tipografia opcional
+  thumbnailUrl String?  @map("thumbnail_url")
+  // legado (nullable; não usado pelos templates custom)
+  slug         String?  @unique
+  family       String?
   persona      String?
-  htmlContent  String         @map("html_content") @db.Text
-  cssVariables Json?          @map("css_variables")
-  createdAt    DateTime       @default(now()) @map("created_at")
-  updatedAt    DateTime       @updatedAt @map("updated_at")
-  contents     Content[]
+  htmlContent  String?  @map("html_content") @db.Text
+  cssVariables Json?    @map("css_variables")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  tenant   Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contents Content[]
 
   @@map("templates")
 }
@@ -207,6 +215,8 @@ model PublishTarget {
   publishedAt     DateTime? @map("published_at")
   externalMediaId String?   @map("external_media_id")
   status          JobStatus @default(PENDING)
+  progress        Int       @default(0)
+  progressPhase   String?   @map("progress_phase")
   attempts        Int       @default(0)
   lastError       String?   @map("last_error") @db.Text
   createdAt       DateTime  @default(now()) @map("created_at")

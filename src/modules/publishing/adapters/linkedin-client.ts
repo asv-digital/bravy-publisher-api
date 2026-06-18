@@ -6,6 +6,7 @@ import {
   MediaItem,
   PublishContext,
   PublishResult,
+  OnPublishProgress,
 } from './base-adapter';
 
 /**
@@ -36,14 +37,18 @@ export class LinkedInClient implements PublishAdapter {
     return contentType === ContentType.CAROUSEL || contentType === ContentType.STATIC;
   }
 
-  async publish(content: ContentToPublish, ctx: PublishContext): Promise<PublishResult> {
+  async publish(
+    content: ContentToPublish,
+    ctx: PublishContext,
+    onProgress?: OnPublishProgress,
+  ): Promise<PublishResult> {
     const author = this.normalizeAuthorUrn(ctx.accountId);
 
     switch (content.type) {
       case 'CAROUSEL':
-        return this.publishMultiImage(content.media, content.caption, author, ctx.accessToken);
+        return this.publishMultiImage(content.media, content.caption, author, ctx.accessToken, onProgress);
       case 'STATIC':
-        return this.publishMultiImage([content.media], content.caption, author, ctx.accessToken);
+        return this.publishMultiImage([content.media], content.caption, author, ctx.accessToken, onProgress);
       default:
         throw new Error(`LinkedInClient does not support ${content.type} yet`);
     }
@@ -65,6 +70,7 @@ export class LinkedInClient implements PublishAdapter {
     caption: string,
     author: string,
     accessToken: string,
+    onProgress?: OnPublishProgress,
   ): Promise<PublishResult> {
     const images = media.filter(m => m.kind === 'image');
     if (images.length === 0) {
@@ -74,17 +80,26 @@ export class LinkedInClient implements PublishAdapter {
       throw new Error(`LinkedIn supports up to ${this.MAX_IMAGES} images, got ${images.length}`);
     }
 
-    this.logger.log(`Uploading ${images.length} image(s) to LinkedIn assets...`);
+    const total = images.length;
+    const report = async (progress: number, phase: string) => {
+      if (onProgress) await onProgress({ progress, phase });
+    };
+    await report(5, 'Iniciando publicação');
+
+    this.logger.log(`Uploading ${total} image(s) to LinkedIn assets...`);
     const assets: string[] = [];
-    for (let i = 0; i < images.length; i++) {
+    for (let i = 0; i < total; i++) {
       const asset = await this.uploadImage(images[i].url, author, accessToken);
       assets.push(asset);
-      this.logger.log(`Asset ${i + 1}/${images.length}: ${asset}`);
+      this.logger.log(`Asset ${i + 1}/${total}: ${asset}`);
+      await report(5 + Math.round(((i + 1) / total) * 80), `Enviando imagem ${i + 1}/${total}`);
     }
 
     this.logger.log('Creating UGC post...');
+    await report(90, 'Publicando no LinkedIn');
     const postId = await this.createUgcPost(author, caption, assets, accessToken);
     this.logger.log(`Published! ugcPost=${postId}`);
+    await report(98, 'Publicado');
 
     return {
       externalMediaId: postId,

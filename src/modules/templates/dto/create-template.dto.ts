@@ -1,29 +1,29 @@
-import { IsEnum, IsNotEmpty, IsObject, IsOptional, IsString } from 'class-validator';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { TemplateFamily } from '@prisma/client';
+import { IsIn, IsNotEmpty, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
 
+/** Template custom criado no designer free-form. `layout` = LayoutSpec (slots). */
 export class CreateTemplateDto {
-  @ApiProperty({ example: 'step-dark-v1' })
   @IsString()
   @IsNotEmpty()
-  slug: string;
+  @MaxLength(80)
+  name: string;
 
-  @ApiProperty({ enum: TemplateFamily, example: 'STEP' })
-  @IsEnum(TemplateFamily)
-  family: TemplateFamily;
+  @IsIn(['post', 'carousel'])
+  kind: 'post' | 'carousel';
 
-  @ApiPropertyOptional({ example: 'contador' })
   @IsOptional()
   @IsString()
-  persona?: string;
+  format?: string;
 
-  @ApiProperty({ example: '<div class="slide">{{content}}</div>' })
-  @IsString()
-  @IsNotEmpty()
-  htmlContent: string;
+  /** LayoutSpec: { kind, width, height, background, slots[] }. */
+  @IsObject()
+  layout: Record<string, unknown>;
 
-  @ApiPropertyOptional({ example: { '--accent': '#00FF88', '--bg': '#111' } })
+  /** snapshot de estilo (paleta/tipografia) opcional. */
   @IsOptional()
   @IsObject()
-  cssVariables?: Record<string, string>;
+  styleData?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsString()
+  thumbnailUrl?: string;
 }

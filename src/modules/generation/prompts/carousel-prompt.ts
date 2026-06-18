@@ -212,7 +212,15 @@ ${topPostsRef}
 === TEMPLATE VISUAL ===
 
 Template: ${templateName}
-${templateName === 'step' ? 'Editorial: capa preta + serif gigante + slides creme texto-pesado + CTA accent' : 'Terminal: capa preta com prompt mono $ jp.asv solve... + slides aspecto IDE/log + checklist > em mono'}
+${
+  templateName === 'step'
+    ? 'Editorial: capa preta + serif gigante + slides creme texto-pesado + CTA accent'
+    : templateName === 'compendium'
+      ? 'Terminal: capa preta com prompt mono $ jp.asv solve... + slides aspecto IDE/log + checklist > em mono'
+      : templateName === 'tweet'
+        ? 'Tweet: cada slide e um card estilo X/Twitter (avatar + @handle + contador). Texto CURTO e conversacional, 1 ideia por slide, frases de tweet (max ~2-3 linhas por paragrafo). Prefira "paragraphs" curtos a listas/cards. Use <em> pra enfase.'
+        : 'Custom: conteudo de carrossel padrao (headline, paragrafos curtos, bullets, CTA). O layout visual e definido pelo template do usuario — foque em texto claro e direto que caiba em poucos slots.'
+}
 Accent hex: ${accentHex}
 Base fixa: cream #F5F2EE, ink #141413, line #DAD3C7
 

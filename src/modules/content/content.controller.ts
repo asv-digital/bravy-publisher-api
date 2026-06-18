@@ -15,6 +15,7 @@ import { QueryContentDto } from './dto/query-content.dto';
 import { TransitionStatusDto } from './dto/transition-status.dto';
 import { CreateSlideDto } from './dto/create-slide.dto';
 import { UpdateSlideDto } from './dto/update-slide.dto';
+import { BulkDeleteDto, BulkUpdateStatusDto } from './dto/bulk-content.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @Controller('contents')
@@ -43,6 +44,22 @@ export class ContentController {
     @Body() dto: CreateContentDto,
   ) {
     return this.contentService.create(dto, user.tenantId, user.userId);
+  }
+
+  @Post('bulk-delete')
+  async bulkDelete(
+    @CurrentUser() user: { userId: string; tenantId: string },
+    @Body() dto: BulkDeleteDto,
+  ) {
+    return this.contentService.bulkSoftDelete(dto.ids, user.tenantId);
+  }
+
+  @Post('bulk-status')
+  async bulkStatus(
+    @CurrentUser() user: { userId: string; tenantId: string },
+    @Body() dto: BulkUpdateStatusDto,
+  ) {
+    return this.contentService.bulkUpdateStatus(dto.ids, user.tenantId, dto.status);
   }
 
   @Patch(':id')

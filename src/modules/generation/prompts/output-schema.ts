@@ -32,7 +32,7 @@ export const GenerationOutputSchema = z.object({
   slug: z.string().min(1),
   padrao: z.string().min(1),
   persona: z.string().min(1),
-  template: z.enum(['step', 'compendium']).catch('step'),
+  template: z.enum(['step', 'compendium', 'tweet']).catch('step'),
   label_topo_capa: z.string().default(''),
   label_capa: z.string().default(''),
   hook_capa: z.string().min(1),

@@ -1,4 +1,4 @@
-import { PrismaClient, TemplateFamily, SlideType } from '@prisma/client';
+import { PrismaClient, SlideType } from '@prisma/client';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as bcrypt from 'bcrypt';
@@ -9,17 +9,6 @@ const HOME = process.env.HOME ?? '';
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function parseFamily(filename: string): TemplateFamily {
-  const lower = filename.toLowerCase();
-  if (lower.includes('terminal')) return 'TERMINAL';
-  if (lower.includes('compendium')) return 'COMPENDIUM';
-  if (lower.includes('editorial')) return 'EDITORIAL';
-  if (lower.includes('split')) return 'SPLIT';
-  if (lower.includes('static')) return 'STATIC';
-  if (lower.includes('step') || lower.includes('7dias') || lower.includes('7passos')) return 'STEP';
-  return 'STEP';
-}
 
 function parsePersona(filename: string): string | null {
   const lower = filename.toLowerCase();
@@ -84,34 +73,12 @@ async function seedTenantAndUser() {
 // 2. Templates
 // ---------------------------------------------------------------------------
 
+// Legado: o model Template agora guarda só templates CUSTOM do usuário (fase 2).
+// Os templates de sistema (Editorial/Twitter/Terminal) são código no frontend.
+// O import de HTML de design/ foi aposentado.
 async function seedTemplates() {
-  console.log('[2/7] Importing templates from design/ ...');
-
-  const designDir = path.join(HOME, 'codigos/marketing/posts/design');
-  if (!fs.existsSync(designDir)) {
-    console.log('  Design directory not found, skipping.');
-    return;
-  }
-
-  const htmlFiles = fs.readdirSync(designDir).filter((f) => f.endsWith('.html'));
-  console.log(`  Found ${htmlFiles.length} HTML template files.`);
-
-  let count = 0;
-  for (const file of htmlFiles) {
-    const slug = file.replace('.html', '');
-    const htmlContent = fs.readFileSync(path.join(designDir, file), 'utf-8');
-    const family = parseFamily(slug);
-    const persona = parsePersona(slug);
-
-    await prisma.template.upsert({
-      where: { slug },
-      update: { htmlContent, family, persona },
-      create: { slug, family, persona, htmlContent },
-    });
-    count++;
-  }
-
-  console.log(`  Upserted ${count} templates.`);
+  console.log('[2/7] Templates de sistema são código no frontend — nada a semear.');
+  void parsePersona;
 }
 
 // ---------------------------------------------------------------------------

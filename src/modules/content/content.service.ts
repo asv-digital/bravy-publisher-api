@@ -178,6 +178,28 @@ export class ContentService {
     });
   }
 
+  async bulkSoftDelete(ids: string[], tenantId: string) {
+    const result = await this.prisma.content.updateMany({
+      where: { id: { in: ids }, tenantId, deletedAt: null },
+      data: { deletedAt: new Date() },
+    });
+
+    return { deleted: result.count };
+  }
+
+  async bulkUpdateStatus(
+    ids: string[],
+    tenantId: string,
+    status: ContentStatus,
+  ) {
+    const result = await this.prisma.content.updateMany({
+      where: { id: { in: ids }, tenantId, deletedAt: null },
+      data: { status },
+    });
+
+    return { updated: result.count };
+  }
+
   async findSlides(contentId: string, tenantId: string) {
     await this.ensureExists(contentId, tenantId);
 

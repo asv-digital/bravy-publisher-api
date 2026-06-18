@@ -6,6 +6,7 @@ import {
   MediaItem,
   PublishContext,
   PublishResult,
+  OnPublishProgress,
 } from './base-adapter';
 
 @Injectable()
@@ -25,10 +26,14 @@ export class InstagramClient implements PublishAdapter {
     return contentType === ContentType.CAROUSEL;
   }
 
-  async publish(content: ContentToPublish, ctx: PublishContext): Promise<PublishResult> {
+  async publish(
+    content: ContentToPublish,
+    ctx: PublishContext,
+    onProgress?: OnPublishProgress,
+  ): Promise<PublishResult> {
     switch (content.type) {
       case 'CAROUSEL':
-        return this.publishCarousel(content.media, content.caption, ctx);
+        return this.publishCarousel(content.media, content.caption, ctx, onProgress);
       default:
         throw new Error(`InstagramClient does not support ${content.type} yet`);
     }
@@ -47,6 +52,7 @@ export class InstagramClient implements PublishAdapter {
     media: MediaItem[],
     caption: string,
     ctx: PublishContext,
+    onProgress?: OnPublishProgress,
   ): Promise<PublishResult> {
     const imageUrls = media
       .filter(m => m.kind === 'image')
@@ -57,25 +63,38 @@ export class InstagramClient implements PublishAdapter {
     }
 
     const { accountId, accessToken } = ctx;
+    const total = imageUrls.length;
+    const report = async (progress: number, phase: string) => {
+      if (onProgress) await onProgress({ progress, phase });
+    };
 
-    this.logger.log(`Creating ${imageUrls.length} child containers...`);
+    // Fases e seus pesos no total (0–100):
+    //  uploading dos N slides ... 5 → 55
+    //  processamento das mídias . 55 → 80
+    //  montagem do carrossel .... 80 → 92
+    //  publicação ............... 92 → 98 (100 quando o service confirma COMPLETED)
+    await report(5, 'Iniciando publicação');
+
+    this.logger.log(`Creating ${total} child containers...`);
     const childrenIds: string[] = [];
 
-    for (let i = 0; i < imageUrls.length; i++) {
+    for (let i = 0; i < total; i++) {
       const result = await this.igPost(`/${accountId}/media`, {
         image_url: imageUrls[i],
         is_carousel_item: 'true',
       }, accessToken);
 
       childrenIds.push(result.id);
-      this.logger.log(`Child ${i + 1}/${imageUrls.length}: container ${result.id}`);
+      this.logger.log(`Child ${i + 1}/${total}: container ${result.id}`);
+      await report(5 + Math.round(((i + 1) / total) * 50), `Enviando slide ${i + 1}/${total}`);
     }
 
     const waitMs = this.PROCESS_WAIT_PER_SLIDE_MS * childrenIds.length;
     this.logger.log(`Waiting ${waitMs}ms for processing...`);
-    await this.sleep(waitMs);
+    await this.sleepWithProgress(waitMs, 55, 80, 'Processando mídias', report);
 
     this.logger.log('Creating CAROUSEL container...');
+    await report(82, 'Montando carrossel');
     const carouselResult = await this.igPost(`/${accountId}/media`, {
       media_type: 'CAROUSEL',
       children: childrenIds.join(','),
@@ -85,14 +104,16 @@ export class InstagramClient implements PublishAdapter {
     const carouselId = carouselResult.id;
     this.logger.log(`CAROUSEL ${carouselId}`);
 
-    await this.sleep(this.CAROUSEL_WAIT_MS);
+    await this.sleepWithProgress(this.CAROUSEL_WAIT_MS, 82, 92, 'Finalizando carrossel', report);
 
     this.logger.log('Publishing...');
+    await report(94, 'Publicando no Instagram');
     const publishResult = await this.igPost(`/${accountId}/media_publish`, {
       creation_id: carouselId,
     }, accessToken);
 
     this.logger.log(`Published! media_id=${publishResult.id}`);
+    await report(98, 'Publicado');
 
     return {
       externalMediaId: publishResult.id,
@@ -142,5 +163,26 @@ export class InstagramClient implements PublishAdapter {
 
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Aguarda `totalMs` em passos curtos, avançando a barra de `fromPct` até
+   * `toPct` ao longo da espera — assim a UI não congela durante os sleeps
+   * fixos que o Instagram exige para processar as mídias.
+   */
+  private async sleepWithProgress(
+    totalMs: number,
+    fromPct: number,
+    toPct: number,
+    phase: string,
+    report: (progress: number, phase: string) => Promise<void>,
+  ): Promise<void> {
+    const stepMs = 2_000;
+    const steps = Math.max(1, Math.ceil(totalMs / stepMs));
+    for (let i = 0; i < steps; i++) {
+      await this.sleep(Math.min(stepMs, totalMs - i * stepMs));
+      const pct = fromPct + Math.round(((i + 1) / steps) * (toPct - fromPct));
+      await report(pct, phase);
+    }
   }
 }

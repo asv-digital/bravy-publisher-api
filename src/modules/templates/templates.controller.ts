@@ -1,20 +1,10 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
-  Param,
-  Body,
-  Query,
-  Res,
-} from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
-import { Response } from 'express';
 import { TemplatesService } from './templates.service';
 import { CreateTemplateDto } from './dto/create-template.dto';
 import { UpdateTemplateDto } from './dto/update-template.dto';
 import { QueryTemplateDto } from './dto/query-template.dto';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('templates')
 @ApiBearerAuth()
@@ -23,34 +13,31 @@ export class TemplatesController {
   constructor(private readonly templatesService: TemplatesService) {}
 
   @Get()
-  async findAll(@Query() query: QueryTemplateDto) {
-    return this.templatesService.findAll(query);
+  async findAll(@CurrentUser() user: { tenantId: string }, @Query() query: QueryTemplateDto) {
+    return this.templatesService.findAll(user.tenantId, query);
   }
 
   @Get(':id')
-  async findOne(@Param('id') id: string) {
-    return this.templatesService.findOne(id);
-  }
-
-  @Get(':id/preview')
-  async preview(@Param('id') id: string, @Res() res: Response) {
-    const html = await this.templatesService.preview(id);
-    res.setHeader('Content-Type', 'text/html');
-    res.send(html);
+  async findOne(@CurrentUser() user: { tenantId: string }, @Param('id') id: string) {
+    return this.templatesService.findOne(user.tenantId, id);
   }
 
   @Post()
-  async create(@Body() dto: CreateTemplateDto) {
-    return this.templatesService.create(dto);
+  async create(@CurrentUser() user: { tenantId: string }, @Body() dto: CreateTemplateDto) {
+    return this.templatesService.create(user.tenantId, dto);
   }
 
   @Patch(':id')
-  async update(@Param('id') id: string, @Body() dto: UpdateTemplateDto) {
-    return this.templatesService.update(id, dto);
+  async update(
+    @CurrentUser() user: { tenantId: string },
+    @Param('id') id: string,
+    @Body() dto: UpdateTemplateDto,
+  ) {
+    return this.templatesService.update(user.tenantId, id, dto);
   }
 
   @Delete(':id')
-  async remove(@Param('id') id: string) {
-    return this.templatesService.remove(id);
+  async remove(@CurrentUser() user: { tenantId: string }, @Param('id') id: string) {
+    return this.templatesService.remove(user.tenantId, id);
   }
 }

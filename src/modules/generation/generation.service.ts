@@ -143,6 +143,7 @@ export class GenerationService {
         hookCapa: generated.hook_capa,
         caption: generated.caption,
         slidesData: generated as any,
+        styleData: (input.styleData as any) ?? undefined,
         brandKitId: brandKit?.id,
         brandKitVersion: brandKit?.version,
         authorId,

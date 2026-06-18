@@ -1,4 +1,4 @@
-import { Controller, Post, Param, Body } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body } from '@nestjs/common';
 import { PublishingService } from './publishing.service';
 import { PublishContentDto } from './dto/publish-content.dto';
 
@@ -17,5 +17,11 @@ export class PublishingController {
       dto.socialAccountId,
       scheduledAt,
     );
+  }
+
+  /** Polling de status/progresso de um publish target (barra de progresso na UI). */
+  @Get('status/:publishTargetId')
+  async status(@Param('publishTargetId') publishTargetId: string) {
+    return this.publishingService.getStatus(publishTargetId);
   }
 }

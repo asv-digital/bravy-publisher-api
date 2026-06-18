@@ -16,7 +16,7 @@ export const PATTERNS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const;
 
 export type Persona = (typeof PERSONAS)[number];
 export type HookPattern = (typeof PATTERNS)[number];
-export type TemplateName = 'step' | 'compendium';
+export type TemplateName = 'step' | 'compendium' | 'tweet' | 'custom';
 
 export interface PatternInfo {
   id: HookPattern;
@@ -58,6 +58,8 @@ export interface GenerationInput {
   pattern?: HookPattern;
   /** família visual explícita do wizard (ausente = automático pelo pattern). */
   template?: TemplateName;
+  /** snapshot de estilo (tipografia/paleta) do template escolhido — ex.: Twitter dark. */
+  styleData?: Record<string, unknown>;
 }
 
 export interface GenerationOutput {

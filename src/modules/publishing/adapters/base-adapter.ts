@@ -20,12 +20,28 @@ export interface PublishResult {
   publishedAt: Date;
 }
 
+/** Reported by adapters as the publish job advances; drives the UI progress bar. */
+export interface PublishProgress {
+  /** 0–100 overall completion. */
+  progress: number;
+  /** Human-readable phase label, e.g. "Enviando slide 2/6". */
+  phase: string;
+}
+
+export type OnPublishProgress = (
+  update: PublishProgress,
+) => void | Promise<void>;
+
 export interface PublishAdapter {
   readonly platform: Platform;
 
   supports(contentType: ContentType): boolean;
 
-  publish(content: ContentToPublish, ctx: PublishContext): Promise<PublishResult>;
+  publish(
+    content: ContentToPublish,
+    ctx: PublishContext,
+    onProgress?: OnPublishProgress,
+  ): Promise<PublishResult>;
 
   validateCredentials(ctx: PublishContext): Promise<boolean>;
 }

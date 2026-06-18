@@ -10,7 +10,7 @@ import { ContentType, Slide } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { EncryptionService } from '../../common/services/encryption.service';
 import { PublishAdapterRegistry } from './adapters/adapter-registry';
-import { ContentToPublish, MediaItem } from './adapters/base-adapter';
+import { ContentToPublish, MediaItem, PublishProgress } from './adapters/base-adapter';
 
 @Injectable()
 export class PublishingService {
@@ -59,6 +59,23 @@ export class PublishingService {
     return publishTarget;
   }
 
+  /** Status + progresso de um publish target, para o polling da UI. */
+  async getStatus(publishTargetId: string) {
+    return this.prisma.publishTarget.findUniqueOrThrow({
+      where: { id: publishTargetId },
+      select: {
+        id: true,
+        status: true,
+        progress: true,
+        progressPhase: true,
+        externalMediaId: true,
+        publishedAt: true,
+        scheduledAt: true,
+        lastError: true,
+      },
+    });
+  }
+
   async publish(publishTargetId: string) {
     const target = await this.prisma.publishTarget.findUniqueOrThrow({
       where: { id: publishTargetId },
@@ -79,15 +96,33 @@ export class PublishingService {
       target.content.contentType,
     );
 
-    const result = await adapter.publish(content, {
-      accountId: target.socialAccount.accountId,
-      accessToken: this.encryption.decrypt(target.socialAccount.accessToken),
-    });
+    // só grava no banco quando o % arredondado muda — evita writes redundantes
+    let lastWritten = -1;
+    const onProgress = async ({ progress, phase }: PublishProgress) => {
+      const pct = Math.max(0, Math.min(99, Math.round(progress)));
+      if (pct === lastWritten) return;
+      lastWritten = pct;
+      await this.prisma.publishTarget.update({
+        where: { id: publishTargetId },
+        data: { progress: pct, progressPhase: phase },
+      });
+    };
+
+    const result = await adapter.publish(
+      content,
+      {
+        accountId: target.socialAccount.accountId,
+        accessToken: this.encryption.decrypt(target.socialAccount.accessToken),
+      },
+      onProgress,
+    );
 
     await this.prisma.publishTarget.update({
       where: { id: publishTargetId },
       data: {
         status: 'COMPLETED',
+        progress: 100,
+        progressPhase: 'Publicado',
         externalMediaId: result.externalMediaId,
         publishedAt: result.publishedAt,
       },

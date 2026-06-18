@@ -5,99 +5,86 @@ import { UpdateTemplateDto } from './dto/update-template.dto';
 import { QueryTemplateDto } from './dto/query-template.dto';
 import { Prisma } from '@prisma/client';
 
+const SELECT = {
+  id: true,
+  name: true,
+  kind: true,
+  format: true,
+  layout: true,
+  styleData: true,
+  thumbnailUrl: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.TemplateSelect;
+
 @Injectable()
 export class TemplatesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(query: QueryTemplateDto) {
-    const { family, persona, search } = query;
+  async findAll(tenantId: string, query: QueryTemplateDto) {
+    const { kind, search } = query;
     const page = query.page ?? 1;
-    const limit = query.limit ?? 20;
+    const limit = query.limit ?? 50;
     const skip = (page - 1) * limit;
 
-    const where: Prisma.TemplateWhereInput = {};
-
-    if (family) {
-      where.family = family;
-    }
-
-    if (persona) {
-      where.persona = persona;
-    }
-
-    if (search) {
-      where.slug = { contains: search, mode: 'insensitive' };
-    }
+    const where: Prisma.TemplateWhereInput = { tenantId };
+    if (kind) where.kind = kind;
+    if (search) where.name = { contains: search, mode: 'insensitive' };
 
     const [data, total] = await Promise.all([
       this.prisma.template.findMany({
         where,
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          slug: true,
-          family: true,
-          persona: true,
-          cssVariables: true,
-          createdAt: true,
-          updatedAt: true,
-        },
+        orderBy: { updatedAt: 'desc' },
+        select: SELECT,
       }),
       this.prisma.template.count({ where }),
     ]);
 
-    return {
-      data,
-      meta: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
+    return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
-  async findOne(id: string) {
-    const template = await this.prisma.template.findUnique({ where: { id } });
-
-    if (!template) {
-      throw new NotFoundException(`Template ${id} not found`);
-    }
-
+  async findOne(tenantId: string, id: string) {
+    const template = await this.prisma.template.findFirst({ where: { id, tenantId }, select: SELECT });
+    if (!template) throw new NotFoundException(`Template ${id} not found`);
     return template;
   }
 
-  async preview(id: string): Promise<string> {
-    const template = await this.prisma.template.findUnique({
-      where: { id },
-      select: { htmlContent: true },
+  async create(tenantId: string, dto: CreateTemplateDto) {
+    return this.prisma.template.create({
+      data: {
+        tenantId,
+        name: dto.name,
+        kind: dto.kind,
+        format: dto.format ?? '1:1',
+        layout: dto.layout as Prisma.InputJsonValue,
+        styleData: (dto.styleData as Prisma.InputJsonValue) ?? undefined,
+        thumbnailUrl: dto.thumbnailUrl,
+      },
+      select: SELECT,
     });
-
-    if (!template) {
-      throw new NotFoundException(`Template ${id} not found`);
-    }
-
-    return template.htmlContent;
   }
 
-  async create(dto: CreateTemplateDto) {
-    return this.prisma.template.create({ data: dto });
-  }
-
-  async update(id: string, dto: UpdateTemplateDto) {
-    await this.findOne(id);
-
+  async update(tenantId: string, id: string, dto: UpdateTemplateDto) {
+    await this.findOne(tenantId, id);
     return this.prisma.template.update({
       where: { id },
-      data: dto,
+      data: {
+        ...(dto.name !== undefined ? { name: dto.name } : {}),
+        ...(dto.kind !== undefined ? { kind: dto.kind } : {}),
+        ...(dto.format !== undefined ? { format: dto.format } : {}),
+        ...(dto.layout !== undefined ? { layout: dto.layout as Prisma.InputJsonValue } : {}),
+        ...(dto.styleData !== undefined ? { styleData: dto.styleData as Prisma.InputJsonValue } : {}),
+        ...(dto.thumbnailUrl !== undefined ? { thumbnailUrl: dto.thumbnailUrl } : {}),
+      },
+      select: SELECT,
     });
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
-
-    return this.prisma.template.delete({ where: { id } });
+  async remove(tenantId: string, id: string) {
+    await this.findOne(tenantId, id);
+    await this.prisma.template.delete({ where: { id } });
+    return { id };
   }
 }
