@@ -1,0 +1,22 @@
+// @publisher/scene-engine — API pública (isomórfica, sem deps de DOM/Node)
+export * from './scene.js';
+export * from './doc.js';
+export * from './brand-kit.js';
+export * from './fonts-manifest.js';
+export * from './tokens.js';
+export * from './ids.js';
+export * from './overrides.js';
+export * from './user-nodes.js';
+export * from './migrate.js';
+export * from './resolve.js';
+export * from './paint.js';
+export * from './text/metrics.js';
+export * from './text/runs.js';
+export * from './text/linebreak.js';
+export * from './text/layout.js';
+export { getTemplate, registerTemplate } from './templates/registry.js';
+export type { TemplateProgram, RawSlide, BuildCtx } from './templates/registry.js';
+export { stepTemplate } from './templates/step.js';
+export { compendiumTemplate } from './templates/compendium.js';
+export { tweetTemplate } from './templates/tweet.js';
+export { layoutTemplate } from './templates/layout.js';

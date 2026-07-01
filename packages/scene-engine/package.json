@@ -1,0 +1,46 @@
+{
+  "name": "@publisher/scene-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Engine de cena determinístico para carrosséis — resolveScene + painter 2D isomórfico (browser/Node).",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "node": ["./dist/node/index.d.ts"]
+    }
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node/index.d.ts",
+      "import": "./dist/node/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "poc": "tsx scripts/poc-render.ts",
+    "test": "tsx --test 'src/**/*.test.ts'",
+    "test:update-goldens": "UPDATE_GOLDENS=1 tsx --test 'src/**/*.golden.test.ts'"
+  },
+  "dependencies": {
+    "fontkit": "^2.0.4",
+    "pixelmatch": "^6.0.0",
+    "pngjs": "^7.0.0",
+    "skia-canvas": "^2.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "@types/pngjs": "^6.0.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["skia-canvas", "esbuild"]
+  }
+}

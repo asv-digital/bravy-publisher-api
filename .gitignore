@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# vendored package build output — needed at runtime, must be tracked
+!/packages/scene-engine/dist/
 .env
 *.log
 .DS_Store
