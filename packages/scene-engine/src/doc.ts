@@ -87,6 +87,8 @@ export interface ContentText {
   template: TemplateFamily;
   persona?: string;
   labelTopoCapa?: string;
+  /** 2-4 tags curtas MAIÚSCULAS da capa (template step); substituem a copy fixa. */
+  tagsCapa?: string[];
   labelCapa?: string;
   hookCapa: string;
   slides: SlideText[];

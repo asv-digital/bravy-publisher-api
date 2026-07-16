@@ -1,10 +1,10 @@
 import { IsString, IsOptional, IsIn } from 'class-validator';
-import { PERSONAS, PATTERNS, Persona, HookPattern } from '../types';
+import { PATTERNS, Persona, HookPattern } from '../types';
 
 export class SuggestThemeDto {
+  /** Slug de uma persona do tenant; desconhecida degrada pro prompt generico. */
   @IsOptional()
   @IsString()
-  @IsIn(PERSONAS)
   persona?: Persona;
 
   @IsOptional()

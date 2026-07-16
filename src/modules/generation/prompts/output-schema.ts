@@ -36,6 +36,15 @@ export const GenerationOutputSchema = z.object({
   persona: z.string().min(1),
   template: z.enum(['step', 'compendium', 'tweet']).catch('step'),
   label_topo_capa: z.string().default(''),
+  /**
+   * 2-4 tags curtas em MAIUSCULAS para a capa (ex.: ["5 PASSOS", "TECNICO"]).
+   * Leniente: ausente vira []; itens vazios são descartados e o excedente é
+   * truncado em 4 (nunca falha por causa das tags → não dispara repair loop).
+   */
+  tags_capa: z
+    .array(z.string())
+    .default([])
+    .transform((tags) => tags.filter((t) => t.trim().length > 0).slice(0, 4)),
   label_capa: z.string().default(''),
   hook_capa: z.string().min(1),
   slides: z.array(SlideOutSchema).min(1),

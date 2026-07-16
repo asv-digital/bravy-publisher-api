@@ -198,6 +198,11 @@ export class AnalyticsService {
     const limit = dto.limit ?? 20;
     const skip = (page - 1) * limit;
 
+    const period = dto.period ?? '30d';
+    const days = parseInt(period.replace('d', ''), 10);
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+
     const contentWhere: any = { tenantId };
     if (dto.persona) contentWhere.persona = dto.persona;
     if (dto.pattern) contentWhere.pattern = dto.pattern;
@@ -207,6 +212,7 @@ export class AnalyticsService {
     const targets = await this.prisma.publishTarget.findMany({
       where: {
         status: 'COMPLETED',
+        publishedAt: { gte: since },
         content: contentWhere,
       },
       include: {
@@ -221,12 +227,26 @@ export class AnalyticsService {
 
     const ranked = targets
       .filter((t) => t.analytics.length > 0)
-      .map((t) => ({
-        publishTargetId: t.id,
-        content: t.content,
-        socialAccount: t.socialAccount,
-        analytics: t.analytics[0],
-      }))
+      .map((t) => {
+        const latest = t.analytics[0];
+        return {
+          contentId: t.contentId,
+          publishTargetId: t.id,
+          slug: t.content.slug,
+          persona: (t.content.persona ?? 'empresario') as any,
+          pattern: (t.content.pattern ?? 'A') as any,
+          publishedAt: t.publishedAt?.toISOString() ?? '',
+          analytics: {
+            likes: latest.likes,
+            comments: latest.comments,
+            shares: latest.shares,
+            saves: latest.saves,
+            reach: latest.reach,
+            impressions: latest.impressions,
+            engagementRate: latest.engagementRate ?? 0,
+          },
+        };
+      })
       .sort((a, b) => {
         const aVal = (a.analytics as any)[sortField] ?? 0;
         const bVal = (b.analytics as any)[sortField] ?? 0;
@@ -238,12 +258,10 @@ export class AnalyticsService {
 
     return {
       data,
-      meta: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
+      total,
+      page,
+      pageSize: limit,
+      totalPages: Math.ceil(total / limit),
     };
   }
 

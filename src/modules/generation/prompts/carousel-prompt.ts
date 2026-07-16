@@ -1,5 +1,35 @@
 import { Persona, HookPattern, PatternInfo, TemplateName, VocabEntry, DatasetTop } from '../types';
 
+/**
+ * Rótulos dos grupos de vocab do nicho original. A ordem aqui é a ordem no
+ * prompt. Grupos fora deste mapa — criados pelo user numa persona própria —
+ * entram depois, rotulados com a própria chave.
+ */
+const VOCAB_LABELS: Record<string, string> = {
+  ferramentas: 'Ferramentas do nicho',
+  obrigacoes: 'Obrigacoes',
+  tributos: 'Tributos',
+  regimes: 'Regimes',
+  areas: 'Areas',
+  documentos: 'Documentos',
+  operacoes: 'Operacoes',
+  dores: 'Dores da persona',
+};
+
+function labelFor(key: string): string {
+  return VOCAB_LABELS[key] ?? key.charAt(0).toUpperCase() + key.slice(1);
+}
+
+export function buildVocabLines(vocab: VocabEntry): string[] {
+  const known = Object.keys(VOCAB_LABELS);
+  const custom = Object.keys(vocab ?? {})
+    .filter((k) => !(k in VOCAB_LABELS))
+    .sort();
+  return [...known, ...custom]
+    .filter((k) => vocab?.[k]?.length)
+    .map((k) => `${labelFor(k)}: ${vocab[k].join(', ')}`);
+}
+
 export function buildSystemPrompt(params: {
   persona: Persona;
   pattern: HookPattern;
@@ -16,15 +46,7 @@ export function buildSystemPrompt(params: {
     params.templateOverride ?? (['D', 'G', 'H'].includes(pattern) ? 'compendium' : 'step');
 
   // Build vocabulary section dynamically based on available keys
-  const vocabLines: string[] = [];
-  if (vocab.ferramentas?.length) vocabLines.push(`Ferramentas do nicho: ${vocab.ferramentas.join(', ')}`);
-  if (vocab.obrigacoes?.length) vocabLines.push(`Obrigacoes: ${vocab.obrigacoes.join(', ')}`);
-  if (vocab.tributos?.length) vocabLines.push(`Tributos: ${vocab.tributos.join(', ')}`);
-  if (vocab.regimes?.length) vocabLines.push(`Regimes: ${vocab.regimes.join(', ')}`);
-  if (vocab.areas?.length) vocabLines.push(`Areas: ${vocab.areas.join(', ')}`);
-  if (vocab.documentos?.length) vocabLines.push(`Documentos: ${vocab.documentos.join(', ')}`);
-  if (vocab.operacoes?.length) vocabLines.push(`Operacoes: ${vocab.operacoes.join(', ')}`);
-  if (vocab.dores?.length) vocabLines.push(`Dores da persona: ${vocab.dores.join(', ')}`);
+  const vocabLines = buildVocabLines(vocab);
 
   // Build top posts reference (top 5 by score)
   const topPostsRef = topPosts
@@ -43,7 +65,7 @@ export function buildSystemPrompt(params: {
     )
     .join('\n');
 
-  return `Voce e um copywriter senior do perfil @jp.asv no Instagram (Joao Pedro Nascimento — GESTAO COM CLAUDE CODE, 78k seguidores).
+  return `Voce e um copywriter senior de um perfil profissional de Instagram que ensina profissionais a automatizarem o trabalho do dia a dia usando IA (Claude Code).
 Gere um carrossel de 6 slides (capa + 4 body + CTA) + caption no formato JSON.
 
 === PADRAO ATIVO ===
@@ -84,6 +106,13 @@ Bons exemplos (1 frase unica):
 - "Recuperacao tributaria de 5 anos em 11 minutos, com peca assinada."
 - "1 agente que cobra cliente em atraso no WhatsApp, 24/7, sem ser chato."
 - "Marca o advogado que ainda redige inicial em 6h. Tem colega entregando em 12 min."
+
+## Tags da capa (tags_capa)
+
+- 2 a 4 tags CURTAS (1-3 palavras cada), TODAS EM MAIUSCULAS
+- Derivadas do conteudo do proprio post: formato, angulo ou promessa (ex. num post de 5 passos tecnicos sem programacao: ["5 PASSOS", "TECNICO", "SEM CODIGO"])
+- PROIBIDO nome de marca, perfil, @handle ou produto — so atributos do conteudo
+- Sem emojis, sem pontuacao final, sem frase completa
 
 ## Especificidade (OBRIGATORIA em TODA copy)
 
@@ -216,7 +245,7 @@ ${
   templateName === 'step'
     ? 'Editorial: capa preta + serif gigante + slides creme texto-pesado + CTA accent'
     : templateName === 'compendium'
-      ? 'Terminal: capa preta com prompt mono $ jp.asv solve... + slides aspecto IDE/log + checklist > em mono'
+      ? 'Terminal: capa preta com prompt mono $ [marca] solve... + slides aspecto IDE/log + checklist > em mono'
       : templateName === 'tweet'
         ? `Tweet: cada slide e um card estilo X/Twitter (avatar + @handle + contador). Texto CURTO e conversacional, 1 ideia por slide. Use <em> pra enfase.
 ORCAMENTO DE TEXTO DO TWEET (obrigatorio — o card ENCOLHE E CORTA com "…" o que passar):
@@ -243,7 +272,8 @@ Campos obrigatorios:
   "padrao": "${pattern}",
   "persona": "${persona}",
   "template": "${templateName}",
-  "label_topo_capa": "CLAUDE CODE / [AREA DA PERSONA EM MAIUSCULO]",
+  "label_topo_capa": "[MARCA OU AREA DA PERSONA EM MAIUSCULO]",
+  "tags_capa": ["TAG CURTA 1", "TAG CURTA 2", "TAG CURTA 3"],
   "label_capa": "subtitulo curto (2-4 palavras)",
   "hook_capa": "1 FRASE UNICA, max 120 chars. Use <em> para enfase e <span class='strong'> para destaque",
   "slides": [
@@ -267,6 +297,7 @@ Campos obrigatorios:
 
 REGRAS DO JSON:
 - hook_capa: EXATAMENTE 1 frase. Se tiver ponto final no meio, esta errado.
+- tags_capa: 2 a 4 tags curtas em MAIUSCULAS derivadas do conteudo. Sem marca, perfil ou @handle.
 - slides: EXATAMENTE 4 elementos (posicoes 02-05)
 - Cada slide usa APENAS UM tipo de conteudo (paragraphs OU list OU stats OU cards)
 - cta_text: SEMPRE contem <span class='keyword'>hoje</span>

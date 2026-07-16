@@ -3,6 +3,8 @@ export interface CarouselInput {
   template: 'step' | 'compendium';
   persona?: string;
   label_topo_capa?: string;
+  /** 2-4 tags curtas MAIÚSCULAS da capa (template step); substituem a copy fixa. */
+  tags_capa?: string[];
   label_capa?: string;
   hook_capa: string;
   slides: SlideInput[];

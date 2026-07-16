@@ -61,8 +61,45 @@ model Tenant {
   socialAccounts SocialAccount[]
   brandKits      BrandKit[]
   templates      Template[]
+  personas       Persona[]
 
   @@map("tenants")
+}
+
+// Personas por tenant — o público-alvo do conteúdo. As 6 personas do nicho
+// (contador, advogado, ...) são só o SEED, criado lazy no primeiro acesso do
+// tenant; daí em diante o user cria/edita/arquiva as dele livremente.
+//
+// `vocab` é o que faz o carrossel soar específico: grupos nomeados de termos
+// do nicho (dores, ferramentas, tributos...) injetados no prompt de geração.
+// Formato: Record<string, string[]> — chaves livres, o prompt rotula cada uma.
+//
+// Content.persona guarda o SLUG (não FK): conteúdo histórico continua legível
+// depois que a persona é arquivada ou renomeada.
+model Persona {
+  id          String    @id @default(uuid())
+  tenantId    String    @map("tenant_id")
+  slug        String
+  name        String
+  description String?
+  // nome do ícone lucide (ex.: 'Calculator') — ver PERSONA_ICONS no frontend
+  icon        String    @default("Users")
+  accentHex   String    @map("accent_hex")
+  softHex     String    @map("soft_hex")
+  // nome legível do acento (ex.: 'Verde escuro') — vai no prompt de geração
+  accentLabel String?   @map("accent_label")
+  vocab       Json      @default("{}")
+  sortOrder   Int       @default(0) @map("sort_order")
+  // arquivar em vez de deletar: preserva o histórico de conteúdo já gerado
+  archivedAt  DateTime? @map("archived_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, slug])
+  @@index([tenantId, archivedAt])
+  @@map("personas")
 }
 
 // Style guide por tenant (RFC §13) — tipografia/paleta/strings da marca.

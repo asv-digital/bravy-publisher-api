@@ -1,20 +1,12 @@
-/**
- * Fonte unica das personas e padroes validos para geracao.
- * Mantenha em sincronia com o frontend (PERSONAS em lib/constants.ts).
- */
-export const PERSONAS = [
-  'contador',
-  'advogado',
-  'empresario',
-  'gestor',
-  'arquiteto',
-  'engenheiro',
-  'agencia',
-] as const;
-
 export const PATTERNS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const;
 
-export type Persona = (typeof PERSONAS)[number];
+/**
+ * Slug de uma persona do tenant (model Persona). Já foi uma union fechada de 7
+ * slugs hardcoded que vivia fora de sincronia com o frontend — hoje as personas
+ * são dados por tenant, então a validação é feita no PersonasService (a persona
+ * existe pra este tenant?), não no tipo.
+ */
+export type Persona = string;
 export type HookPattern = (typeof PATTERNS)[number];
 export type TemplateName = 'step' | 'compendium' | 'tweet' | 'custom';
 
@@ -30,16 +22,16 @@ export interface PatternInfo {
   quando_usar: string;
 }
 
-export interface VocabEntry {
-  ferramentas?: string[];
-  obrigacoes?: string[];
-  tributos?: string[];
-  regimes?: string[];
-  operacoes?: string[];
-  documentos?: string[];
-  areas?: string[];
-  dores?: string[];
-}
+/**
+ * Vocabulário do nicho da persona, injetado no prompt pra o carrossel soar
+ * específico. Chave = grupo (livre, definido pelo user: 'dores', 'tributos',
+ * 'sistemas que ja paga'...), valor = termos daquele grupo.
+ *
+ * Era uma interface de chaves fixas do nicho contábil/jurídico; virou aberta
+ * quando as personas passaram a ser criadas pelo user. VOCAB_LABELS no
+ * carousel-prompt rotula as chaves conhecidas; o resto usa a própria chave.
+ */
+export type VocabEntry = Record<string, string[]>;
 
 export interface DatasetTop {
   code: string;
@@ -88,6 +80,8 @@ export interface GenerationOutput {
   persona: Persona;
   template: TemplateName;
   label_topo_capa: string;
+  /** 2-4 tags curtas em MAIUSCULAS da capa, derivadas do conteudo (sem marcas). */
+  tags_capa: string[];
   label_capa: string;
   hook_capa: string;
   slides: Array<{

@@ -25,6 +25,7 @@ import { FilesModule } from './modules/files/files.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
 import { BrandKitModule } from './modules/brand-kit/brand-kit.module';
 import { FontsModule } from './modules/fonts/fonts.module';
+import { PersonasModule } from './modules/personas/personas.module';
 import redisConfig from './config/redis.config';
 
 @Module({
@@ -70,6 +71,7 @@ import redisConfig from './config/redis.config';
     UploadsModule,
     BrandKitModule,
     FontsModule,
+    PersonasModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

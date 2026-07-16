@@ -1,11 +1,12 @@
 import { IsString, IsIn, IsOptional, IsObject } from 'class-validator';
-import { PERSONAS, PATTERNS, Persona, HookPattern, TemplateName } from '../types';
+import { PATTERNS, Persona, HookPattern, TemplateName } from '../types';
 
 export class GenerateDto {
   @IsString()
   tema: string;
 
-  @IsIn(PERSONAS)
+  /** Slug de uma persona do tenant — existência validada no GenerationService. */
+  @IsString()
   persona: Persona;
 
   @IsOptional()

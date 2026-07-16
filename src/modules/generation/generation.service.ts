@@ -13,7 +13,7 @@ import { SlideImageService } from './slide-image.service';
 import { buildSystemPrompt } from './prompts/carousel-prompt';
 import { buildThemeIdeasPrompt } from './prompts/theme-ideas-prompt';
 import { selectTemplate } from './prompts/template-selector';
-import { ACCENT_PALETTE } from './prompts/accent-palette';
+import { PersonasService } from '../personas/personas.service';
 import {
   GenerationOutputSchema,
   SlideOutSchema,
@@ -51,6 +51,7 @@ export class GenerationService {
     private readonly config: ConfigService,
     private readonly factCheck: FactCheckService,
     private readonly slideImage: SlideImageService,
+    private readonly personas: PersonasService,
   ) {
     this.anthropic = new Anthropic({
       apiKey: this.config.get<string>('ANTHROPIC_API_KEY'),
@@ -63,13 +64,11 @@ export class GenerationService {
     // Load dataset files
     const patterns = this.loadJson<PatternInfo[]>('padroes_validados.json');
     const topPosts = this.loadJson<DatasetTop[]>('top_carrosseis.json');
-    const vocabAll = this.loadJson<Record<string, VocabEntry>>('vocab.json');
-    const vocab = vocabAll[input.persona] || vocabAll['geral'] || {};
+    const { persona, vocab } = await this.resolvePersona(tenantId, input.persona);
 
     // Select pattern
     const pattern: HookPattern = input.pattern || 'A';
     const templateName = selectTemplate(pattern);
-    const accent = ACCENT_PALETTE[input.persona] || ACCENT_PALETTE.empresario;
 
     // Build prompt
     const systemPrompt = buildSystemPrompt({
@@ -78,7 +77,7 @@ export class GenerationService {
       patterns,
       topPosts,
       vocab,
-      accentHex: accent.hex,
+      accentHex: persona.accentHex,
       templateOverride: input.template,
     });
 
@@ -156,6 +155,7 @@ export class GenerationService {
               slideType: 'COVER',
               bodyData: {
                 label_topo_capa: generated.label_topo_capa,
+                tags_capa: generated.tags_capa,
                 label_capa: generated.label_capa,
                 hook_capa: generated.hook_capa,
               },
@@ -215,18 +215,31 @@ export class GenerationService {
     return content;
   }
 
-  async suggestThemes(input: {
-    persona?: string;
-    pattern?: string;
-    hint?: string;
-  }): Promise<{ ideas: string[] }> {
+  async suggestThemes(
+    input: {
+      persona?: string;
+      pattern?: string;
+      hint?: string;
+    },
+    tenantId: string,
+  ): Promise<{ ideas: string[] }> {
     const patterns = this.loadJson<PatternInfo[]>('padroes_validados.json');
-    const vocabAll = this.loadJson<Record<string, VocabEntry>>('vocab.json');
-    const vocab =
-      (input.persona && vocabAll[input.persona]) || vocabAll['geral'] || {};
+
+    // Persona é opcional aqui (o user pode pedir ideias antes de escolher),
+    // então uma persona inexistente degrada pro prompt genérico em vez de 400.
+    const persona = input.persona
+      ? await this.personas.findBySlug(tenantId, input.persona)
+      : null;
+
+    let vocab: VocabEntry = persona ? await this.personas.vocabFor(tenantId, persona.slug) : {};
+    if (Object.keys(vocab).length === 0) {
+      const legacy = this.loadJson<Record<string, VocabEntry>>('vocab.json');
+      vocab = (input.persona && legacy?.[input.persona]) || legacy?.['geral'] || {};
+    }
 
     const prompt = buildThemeIdeasPrompt({
       persona: input.persona,
+      personaLabel: persona?.description ?? persona?.name,
       pattern: input.pattern,
       patterns,
       vocab,
@@ -410,6 +423,31 @@ export class GenerationService {
     }
 
     return { data: result.data, model: resp.model, usage };
+  }
+
+  /**
+   * Resolve a persona do tenant (cores + vocab do nicho).
+   *
+   * O vocab do banco tem precedência. Se a persona ainda não tem vocab próprio,
+   * cai no vocab.json legado (o dataset dropado em DATASET_DIR) — assim os
+   * tenants que já rodavam com o arquivo não perdem qualidade de geração
+   * enquanto o vocab não é preenchido em /settings/personas.
+   */
+  private async resolvePersona(tenantId: string, slug: string) {
+    const persona = await this.personas.findBySlug(tenantId, slug);
+    if (!persona) {
+      throw new BadRequestException(`Persona "${slug}" nao existe neste tenant`);
+    }
+    if (persona.archivedAt) {
+      throw new BadRequestException(`Persona "${persona.name}" esta arquivada`);
+    }
+
+    let vocab = await this.personas.vocabFor(tenantId, slug);
+    if (Object.keys(vocab).length === 0) {
+      const legacy = this.loadJson<Record<string, VocabEntry>>('vocab.json');
+      vocab = legacy?.[slug] || legacy?.['geral'] || {};
+    }
+    return { persona, vocab };
   }
 
   private loadJson<T>(filename: string): T {

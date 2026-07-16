@@ -35,10 +35,10 @@ const SEED_PALETTE = {
 };
 
 const SEED_BRAND = {
-  handle: '@JP.ASV',
-  breadcrumb: 'CLAUDE CODE BR',
-  ctaKeyword: 'hoje',
-  logoGlyph: '✻',
+  handle: '',
+  breadcrumb: '',
+  ctaKeyword: '',
+  logoGlyph: '',
 };
 
 export interface BrandKitPatch {

@@ -23,8 +23,11 @@ export class GenerationController {
   }
 
   @Post('suggest-theme')
-  async suggestTheme(@Body() dto: SuggestThemeDto) {
-    return this.generationService.suggestThemes(dto);
+  async suggestTheme(
+    @CurrentUser() user: { userId: string; tenantId: string },
+    @Body() dto: SuggestThemeDto,
+  ) {
+    return this.generationService.suggestThemes(dto, user.tenantId);
   }
 
   @Post('regenerate/:id')

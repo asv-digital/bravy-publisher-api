@@ -67,6 +67,7 @@ export function carouselToContentText(input: CarouselInput): ContentText {
     template: input.template,
     persona: input.persona,
     labelTopoCapa: input.label_topo_capa,
+    tagsCapa: input.tags_capa,
     labelCapa: input.label_capa,
     hookCapa: input.hook_capa,
     slides: (input.slides ?? []).map(mapSlide),

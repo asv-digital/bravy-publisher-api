@@ -1,46 +1,26 @@
 import { PatternInfo, VocabEntry } from '../types';
-
-const PERSONA_LABEL: Record<string, string> = {
-  contador: 'contadores e escritorios contabeis / BPO fiscal',
-  advogado: 'advogados e escritorios juridicos',
-  empresario: 'empresarios, donos de empresa e diretores',
-  gestor: 'gestores e lideres operacionais',
-  arquiteto: 'arquitetos e escritorios de arquitetura',
-  engenheiro: 'engenheiros civis, mecanicos e eletricos',
-  agencia: 'agencias de marketing, publicidade e social media',
-};
+import { buildVocabLines } from './carousel-prompt';
 
 export function buildThemeIdeasPrompt(params: {
   persona?: string;
+  /** Descrição da persona (Persona.description do tenant); sem ela, usa o slug. */
+  personaLabel?: string;
   pattern?: string;
   patterns: PatternInfo[];
   vocab: VocabEntry;
   hint?: string;
 }): string {
-  const { persona, pattern, patterns, vocab, hint } = params;
+  const { persona, personaLabel, pattern, patterns, vocab, hint } = params;
 
   const personaDesc = persona
-    ? PERSONA_LABEL[persona] || persona
+    ? personaLabel || persona
     : 'profissionais e empresas que querem automatizar tarefas com IA';
 
   const activePattern = pattern
     ? patterns.find((p) => p.id === pattern)
     : undefined;
 
-  const vocabLines: string[] = [];
-  if (vocab.ferramentas?.length)
-    vocabLines.push(`Ferramentas do nicho: ${vocab.ferramentas.join(', ')}`);
-  if (vocab.obrigacoes?.length)
-    vocabLines.push(`Obrigacoes: ${vocab.obrigacoes.join(', ')}`);
-  if (vocab.tributos?.length)
-    vocabLines.push(`Tributos: ${vocab.tributos.join(', ')}`);
-  if (vocab.regimes?.length)
-    vocabLines.push(`Regimes: ${vocab.regimes.join(', ')}`);
-  if (vocab.areas?.length) vocabLines.push(`Areas: ${vocab.areas.join(', ')}`);
-  if (vocab.operacoes?.length)
-    vocabLines.push(`Operacoes: ${vocab.operacoes.join(', ')}`);
-  if (vocab.dores?.length)
-    vocabLines.push(`Dores da persona: ${vocab.dores.join(', ')}`);
+  const vocabLines = buildVocabLines(vocab);
 
   const vocabBlock = vocabLines.length
     ? `\n=== VOCABULARIO DO NICHO (use termos reais daqui) ===\n${vocabLines.join('\n')}\n`
@@ -54,7 +34,7 @@ export function buildThemeIdeasPrompt(params: {
     ? `\n=== DIRECAO DO USUARIO ===\nO usuario deu esta pista, use como ponto de partida: "${hint}"\n`
     : '';
 
-  return `Voce e o estrategista de conteudo do perfil @jp.asv no Instagram (Joao Pedro Nascimento — GESTAO COM CLAUDE CODE, 78k seguidores). O perfil ensina profissionais a automatizarem o trabalho do dia a dia usando IA (Claude Code).
+  return `Voce e o estrategista de conteudo de um perfil profissional no Instagram que ensina profissionais a automatizarem o trabalho do dia a dia usando IA (Claude Code).
 
 Sua tarefa: sugerir 3 TEMAS concretos de carrossel para a persona: ${personaDesc}.
 ${patternBlock}${vocabBlock}${hintBlock}

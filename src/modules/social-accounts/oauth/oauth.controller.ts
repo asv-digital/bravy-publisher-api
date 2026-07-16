@@ -60,7 +60,7 @@ export class OAuthController {
     @Res() res: Response,
   ): Promise<void> {
     const frontendUrl = this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000';
-    const returnPath = this.config.get<string>('OAUTH_RETURN_PATH') ?? '/settings/canais';
+    const returnPath = this.config.get<string>('OAUTH_RETURN_PATH') ?? '/settings/channels';
     const accountsPage = `${frontendUrl}${returnPath}`;
 
     if (error) {
